@@ -53,7 +53,6 @@
   (setf (ode::move-handler *body*)
 	(lambda (x)
 	  (declare (ignore x))
-	  
 	  (setf (clinch:transform sphere-node) (sb-cga:Matrix*  (cl-ode::body-get-transform *body*) (sb-cga:scale (sb-cga:vec .5 .5 .5))))))
 
   ;; Add a collision handler... 

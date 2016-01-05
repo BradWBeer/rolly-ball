@@ -68,7 +68,6 @@
 
 (defun reset-maze (w h)
   (destroy-all-statics)
-  (format t "STATIC OBJECTS = ~A~%" *static-objects*)
   (let ((maze (make-game-maze w h)))
     (ode:body-set-position *body* 
 			   (- 2 (* 2 (ash w -1))) 
@@ -249,6 +248,8 @@
   (setf *jump* nil)
   (add-force *body* (first *direction*) 0 (second *direction*))
   (ode:physics-step *world* *space*)
+
+  
 
   ;; set the camera
   (let ((pos (ode:body-get-position *body*)))

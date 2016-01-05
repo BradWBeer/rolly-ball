@@ -14,11 +14,12 @@
   (setf *controllers* nil
 	*haptic* nil)
 
-  (sdl2-ffi.functions::sdl-game-controller-add-mappings-from-rw (sdl2::sdl-rw-from-file  "gamecontrollerdb.txt" "rw") 1)
-  (format t "Opening game controllers.~%")
+  
+  (format t "Opening game controllers. ~A ~%"
+	  (sdl2-ffi.functions::sdl-game-controller-add-mappings-from-rw
+	   (sdl2::sdl-rw-from-file  (make-local-path "gamecontrollerdb.txt") "rw") 1))
   (finish-output)
   ;; open any game controllers
-  
 
   (loop for i from 0 upto (- (sdl2:joystick-count) 1)
      do (when (sdl2:game-controller-p i)

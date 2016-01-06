@@ -5,6 +5,7 @@
 (defvar geo-node nil)
 (defvar overlay-node nil)
 (defvar sphere-node nil)
+(defvar cylinder-node nil)
 (defvar overlay-node-1 nil)
 (defvar overlay-node-2 nil)
 (defvar overlay-node-3 nil)
@@ -23,6 +24,7 @@
 
 (defvar sphere nil)
 (defvar cube nil)
+(defvar cylinder nil)
 (defvar overlay-entity-1 nil)
 (defvar overlay-entity-2 nil)
 (defvar overlay-entity-3 nil)
@@ -30,8 +32,7 @@
 (defvar target nil)
 (defvar ground nil)
 
-(defvar projection-matrix nil)
-
+(defvar *maze* nil)
 (defvar *static-objects* nil)
 
 (defvar *direction* '(0 0))
@@ -53,18 +54,18 @@
 
 
 (defun make-game-maze (width height)
-
-  (let ((maze (make-maze width height))
-	(w/2 (ash width -1))
+  
+  (setf *maze* (make-maze width height))
+  (let ((w/2 (ash width -1))
 	(h/2 (ash height -1)))
 
-    (loop for i below (array-dimension maze 0)
+    (loop for i below (array-dimension *maze* 0)
        do (fresh-line)
-	 (loop for j below (array-dimension maze 1)
-	    unless (aref maze i j)
+	 (loop for j below (array-dimension *maze* 1)
+	    unless (aref *maze* i j)
 	    do (make-cube (* (- j h/2) 2)
 			  (* (- i w/2) 2))))
-    maze))
+    *maze*))
 
 (defun reset-maze (w h)
   (destroy-all-statics)
@@ -73,6 +74,16 @@
 			   (- 2 (* 2 (ash w -1))) 
 			   .5
 			   (- 2 (* (ash h -1) 2)))
+    (clinch:set-identity-transform cylinder-node)
+    (clinch:rotate cylinder-node (clinch:degrees->radians 90) 1 0 0)
+
+    (clinch:set-identity-transform game::cylinder-node)
+    (clinch:rotate game::cylinder-node (clinch:degrees->radians 90) 1 0 0)
+    (clinch:scale game::cylinder-node 1 2 1)
+    (clinch:translate game::cylinder-node
+		      (- 2 (* 2 (ash w -1))) 
+		      2
+		      (- 2 (* (ash h -1) 2)))
     maze))
 
   ;; init game objects...
@@ -95,6 +106,19 @@
   ;; create the cube
   (setf cube (eval-from-file "assets/mesh/cube.lisp"))
   (setf (clinch:shader cube) (lambda () tex-light-shader))
+
+  ;; create the cylinder
+  (setf cylinder (eval-from-file "assets/mesh/cylinder.lisp"))
+  (setf (clinch:shader cylinder) (lambda () tex-light-shader))
+  (setf cylinder-node (make-instance 'clinch:node))
+  (clinch:add-child cylinder-node cylinder)
+  (clinch:add-child geo-node cylinder-node)
+
+  (clinch:rotate cylinder-node (clinch:degrees->radians 90) 1 0 0)
+  (let ((tex (make-texture 20 20)))
+    (setf (clinch:render-value cylinder "t1") tex)
+    (draw-overlay tex '(1 0 0 1)))
+
 
   ;; create the ground
   (setf ground (eval-from-file "assets/mesh/ground.lisp"))
@@ -249,11 +273,9 @@
   (add-force *body* (first *direction*) 0 (second *direction*))
   (ode:physics-step *world* *space*)
 
-  
-
   ;; set the camera
   (let ((pos (ode:body-get-position *body*)))
-    (set-camera (- (aref pos 0)) -20 (- -2 (aref pos 2)) 80 1 0 0))
+    (set-camera (- (aref pos 0)) -5 (- -2 (aref pos 2)) 40 1 0 0))
 
   ;; do the render pipeline...
   (opengl-clear-main-window)

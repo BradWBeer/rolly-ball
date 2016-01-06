@@ -122,12 +122,12 @@
 	(clinch:render-value target "lightDirection")
 	'(0.5772705 0.5772705 -0.5772705)
 	(clinch:render-value target "lightAmbient")
-		'(.2 .2 .2))
+		'(.35 .35 .35))
 
   (clinch:render target-node :projection ortho-matrix)
 
   (setf (clinch:render-value target "lightIntensity")
-	'(.5 .0 0.0)
+	'(.0 .0 .5)
 	(clinch:render-value target "lightDirection")
 	'(-0.5772705 -0.5772705 0.5772705)
 		(clinch:render-value target "lightAmbient")

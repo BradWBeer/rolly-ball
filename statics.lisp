@@ -51,9 +51,15 @@
   (setf *static-objects* (make-hash-table)))
 
 (defun make-cube (x y)
-  
-  (make-instance 'static-game-object
-		 :parent geo-node
-		 :geometry (ode:create-box *space* 2 2 2)
-		 :entity cube
-		 :x x :y 1 :z y))
+
+  (let ((box (ode:create-box *space* 2 2 2)))
+
+    (setf (ode::surface-mu box) 1)
+    ;;(setf (ode::surface-bounce box) .5)
+    ;;(setf (ode::surface-bounce-vel box) .1)
+    
+    (make-instance 'static-game-object
+		   :parent geo-node
+		   :geometry box
+		   :entity cube
+		   :x x :y 1 :z y)))

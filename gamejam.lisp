@@ -35,6 +35,8 @@
 (defvar *maze* nil)
 (defvar *static-objects* nil)
 
+(defvar *manual-objects* nil)
+
 (defvar *direction* '(0 0))
 (defvar *jump* nil)
 (defvar *jump-speed* 4)
@@ -51,6 +53,64 @@
    (read-from-string
     (alexandria:read-file-into-string
      (make-local-path file)))))
+
+
+(defun position-cylinder (node x y &optional (height 2))
+	   (clinch:set-identity-transform node)
+	   (clinch:rotate node (clinch:degrees->radians 90) 1 0 0)
+	   (clinch:scale node 1 height 1)
+	   (clinch:translate node x 2 y))
+
+(defun lerp (x y distance)
+  (let ((1-distance (- 1 distance)))
+    (if (and (numberp x)
+	     (numberp y))
+	(+ (* x 1-distance) (* y distance))
+	(map 'list (lambda (a b)
+		     (+ (* a 1-distance) (* b distance)))
+	     x y))))
+
+(defun make-move-cylinder-func (node start end speed handler)
+  (let* ((pos      start)
+	 (movement (sb-cga:vec* 
+		    (sb-cga:normalize 
+		     (sb-cga:vec- end start))
+		    speed)))
+    (format t "movement = ~A~%" movement)
+    (lambda ()
+      (let ((distance (sb-cga:vec-length (sb-cga:vec- pos end))))
+	(format t "start=~A end=~A movement=~A pos=~A distance=~A~%" start end movement pos distance)
+	(if (<  distance speed)
+	    (progn (funcall handler) nil)
+	    (progn
+	      (setf pos 
+		    (sb-cga:vec+ pos movement))
+	      (position-cylinder node (aref pos 0) (aref pos 2))))))))
+   
+ (let ((start (sb-cga:vec 0.0 2.0 10.0))
+	       (end   (sb-cga:vec 0.0 2.0 20.0))
+	       (pos   (sb-cga:vec 0.0 2.0 10.0))
+	       (speed .5))
+	   (if (< (sb-cga:vec-length (sb-cga:vec- pos end)) speed)
+	       t
+	       (setf pos 
+		     (sb-cga:vec+ pos 
+				  (sb-cga:vec* 
+				   (sb-cga:normalize 
+				    (sb-cga:vec- end start))
+				   speed)))))
+ (let ((start (sb-cga:vec 0.0 2.0 10.0))
+	       (end   (sb-cga:vec 0.0 2.0 20.0))
+	       (pos   (sb-cga:vec 0.0 2.0 10.0))
+	       (speed .5))
+	   (if (< (sb-cga:vec-length (sb-cga:vec- pos end)) speed)
+	       t
+	       (setf pos 
+		     (sb-cga:vec+ pos 
+				  (sb-cga:vec* 
+				   (sb-cga:normalize 
+				    (sb-cga:vec- end start))
+				   speed)))))
 
 
 (defun make-game-maze (width height)
@@ -76,14 +136,9 @@
 			   (- 2 (* (ash h -1) 2)))
     (clinch:set-identity-transform cylinder-node)
     (clinch:rotate cylinder-node (clinch:degrees->radians 90) 1 0 0)
-
-    (clinch:set-identity-transform game::cylinder-node)
-    (clinch:rotate game::cylinder-node (clinch:degrees->radians 90) 1 0 0)
-    (clinch:scale game::cylinder-node 1 2 1)
-    (clinch:translate game::cylinder-node
-		      (- 2 (* 2 (ash w -1))) 
-		      2
-		      (- 2 (* (ash h -1) 2)))
+    (position-cylinder cylinder-node
+		       (- 2 (* 2 (ash w -1))) 
+		       (- 2 (* (ash h -1) 2)))
     maze))
 
   ;; init game objects...
@@ -267,6 +322,12 @@
       )))
 
 (defun main-loop ()
+
+  ;; move the manual objects 
+  (setf *manual-objects* 
+	(loop for i in *manual-objects*
+	   if (funcall i)
+	   collect i))
 
   ;; do physics
   (setf *jump* nil)

@@ -36,6 +36,7 @@
 (defvar *static-objects* nil)
 
 (defvar *manual-objects* nil)
+(defvar *laser1-position* nil)
 
 (defvar *direction* '(0 0))
 (defvar *jump* nil)
@@ -55,11 +56,15 @@
      (make-local-path file)))))
 
 
-(defun position-cylinder (node x y &optional (height 2))
-	   (clinch:set-identity-transform node)
-	   (clinch:rotate node (clinch:degrees->radians 90) 1 0 0)
-	   (clinch:scale node 1 height 1)
-	   (clinch:translate node x 2 y))
+(defun position-cylinder (node maze x y &optional (height 2))
+
+  (let* ((maze-size (array-dimensions maze)))
+    (multiple-value-bind (w h)
+	(maze->position x y (first maze-size) (second maze-size))
+      (clinch:set-identity-transform node)
+      (clinch:rotate node (clinch:degrees->radians 90) 1 0 0)
+      (clinch:scale node 1 height 1)
+      (clinch:translate node w height h))))
 
 (defun lerp (x y distance)
   (let ((1-distance (- 1 distance)))
@@ -70,16 +75,14 @@
 		     (+ (* a 1-distance) (* b distance)))
 	     x y))))
 
-(defun make-move-cylinder-func (node start end speed handler)
+(defun make-move-cylinder-func (node maze start end speed handler)
   (let* ((pos      start)
 	 (movement (sb-cga:vec* 
 		    (sb-cga:normalize 
 		     (sb-cga:vec- end start))
 		    speed)))
-    (format t "movement = ~A~%" movement)
     (lambda ()
       (let ((distance (sb-cga:vec-length (sb-cga:vec- pos end))))
-	(format t "start=~A end=~A movement=~A pos=~A distance=~A~%" start end movement pos distance)
 	(if (<  distance speed)
 	    (progn (funcall handler) nil)
 	    (progn
@@ -87,30 +90,34 @@
 		    (sb-cga:vec+ pos movement))
 	      (position-cylinder node (aref pos 0) (aref pos 2))))))))
    
- (let ((start (sb-cga:vec 0.0 2.0 10.0))
-	       (end   (sb-cga:vec 0.0 2.0 20.0))
-	       (pos   (sb-cga:vec 0.0 2.0 10.0))
-	       (speed .5))
-	   (if (< (sb-cga:vec-length (sb-cga:vec- pos end)) speed)
-	       t
-	       (setf pos 
-		     (sb-cga:vec+ pos 
-				  (sb-cga:vec* 
-				   (sb-cga:normalize 
-				    (sb-cga:vec- end start))
-				   speed)))))
- (let ((start (sb-cga:vec 0.0 2.0 10.0))
-	       (end   (sb-cga:vec 0.0 2.0 20.0))
-	       (pos   (sb-cga:vec 0.0 2.0 10.0))
-	       (speed .5))
-	   (if (< (sb-cga:vec-length (sb-cga:vec- pos end)) speed)
-	       t
-	       (setf pos 
-		     (sb-cga:vec+ pos 
-				  (sb-cga:vec* 
-				   (sb-cga:normalize 
-				    (sb-cga:vec- end start))
-				   speed)))))
+(defun find-valid-movement (maze x y)
+  (destructuring-bind (w h) (array-dimensions maze)
+    (list (and (> x 0) (aref maze (1- x) y))
+	  (and (> y 0) (aref maze x (1- y)))
+	  (and (< x (1- w)) (aref maze (1+ x) y))
+	  (and (< y (1- h)) (aref maze x (1+ y))))))
+
+(defun get-random-valid-direction (maze x y)
+  (loop with lst = (find-valid-movement maze x y)
+     for r = (random 4)
+     until (nth r lst)
+     finally (return 
+	       (cond ((= r 0) '(-1 0))
+		     ((= r 1) '(0 -1))
+		     ((= r 2) '(1 0))
+		     ((= r 3) '(0 1))))))
+
+(defun move-random-valid-direction (node maze pos)
+  (let* ((dir (get-random-valid-direction maze (first pos) (second pos)))
+	 (dest (map 'list #'+ pos dir)))
+    (make-move-cylinder-func node pos dest .1
+			     (lambda ()
+			       ))))
+
+			       
+			       (move-random-valid-direction node maze dest)))))
+    
+  
 
 
 (defun make-game-maze (width height)
@@ -127,22 +134,27 @@
 			  (* (- i w/2) 2))))
     *maze*))
 
+(defun maze->position (x y w h)
+  (values (- 2 (* 2 (- (ash w -2) x)))
+	  (- 2 (* 2 (- (ash h -2) y)))))
+  
+(defun maze->vector (x y w h up)
+  (multiple-value-bind (a b) (maze->position x y w h)
+    (sb-cga:vec (float a) (float up) (float b)))) 
+
 (defun reset-maze (w h)
   (destroy-all-statics)
   (let ((maze (make-game-maze w h)))
-    (ode:body-set-position *body* 
-			   (- 2 (* 2 (ash w -1))) 
-			   .5
-			   (- 2 (* (ash h -1) 2)))
-    (clinch:set-identity-transform cylinder-node)
-    (clinch:rotate cylinder-node (clinch:degrees->radians 90) 1 0 0)
-    (position-cylinder cylinder-node
-		       (- 2 (* 2 (ash w -1))) 
-		       (- 2 (* (ash h -1) 2)))
-    maze))
+    (multiple-value-bind (x y) (maze->position 0 0 w h)
+      (ode:body-set-position *body* x .5 y)
+      (move-random-valid-direction cylinder-node maze '(0 0))
+    maze)))
 
   ;; init game objects...
 (defun init ()
+
+  ;;(setf *laser1-position* '(0 0))
+  
 
   (init-opengl)
 

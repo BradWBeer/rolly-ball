@@ -49,6 +49,10 @@ the sdl2:with-init code."
 	      
 	      (sdl2:with-event-loop (:method :poll)
 		
+		(:keydown
+		 (:keysym keysym)
+		 (on-key-down keysym))
+		   
 		(:keyup (:keysym keysym) (on-key-up keysym))
 		
 		(:controlleraxismotion
@@ -65,11 +69,17 @@ the sdl2:with-init code."
 		 (:which controller-id)
 
 		 (let ((h (cdr (assoc controller-id *haptic*))))	   
-		   (when *jump*
-		     (let ((v (ode::body-get-linear-vel *body*)))
-		       (cl-ode:body-set-linear-vel *body* (aref v 0) *jump-speed* (aref v 2))
-		       (when h
-			 (sdl2:rumble-play h 1.0 100))))))
+		   (if *game-over*
+		       (progn
+			 (game::reset-maze 10 10)
+			 (setf *game-over* nil)
+			 (when h
+			   (sdl2:rumble-play h 1.0 100)))
+		       (when *jump*
+			 (let ((v (ode::body-get-linear-vel *body*)))
+			   (cl-ode:body-set-linear-vel *body* (aref v 0) *jump-speed* (aref v 2))
+			   (when h
+			     (sdl2:rumble-play h 1.0 100)))))))
 
 		(:windowevent (:event raw-event :data1 d1 :data2 d2)
 			      (let ((event (autowrap:enum-key 'sdl2-ffi:sdl-window-event-id raw-event)))

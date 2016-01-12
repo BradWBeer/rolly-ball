@@ -47,6 +47,7 @@
 (defvar *laser1-position* nil)
 
 (defvar *direction* '(0 0))
+(defvar *keyboard-direction* '(0 0))
 (defvar *jump* nil)
 (defvar *jump-speed* 4)
 (defvar *game-over* nil)
@@ -62,8 +63,6 @@
    (read-from-string
     (alexandria:read-file-into-string
      (make-local-path file)))))
-
-
 
 
 (defun position-cylinder (node x y pc &optional (height 2))
@@ -287,7 +286,7 @@
     (setf cylinder-node-3 (add-cylinder pos))
     (setf cylinder-node-4 (add-cylinder pos)))
 
-  (sdl2-mixer:play-music *music*))
+  (setf *channel* (sdl2-mixer:play-music *music*)))
 
 (defun entity-replace-texture (entity id width height color)
   (let ((tex (clinch:render-value entity id)))
@@ -384,14 +383,47 @@
 	(clinch:render-value overlay-entity-3 "t1")))
 
 
+(defun on-key-down (keysym)
+  (let ((scancode (sdl2:scancode-value keysym))
+	(sym (sdl2:sym-value keysym))
+	(mod-value (sdl2:mod-value keysym)))
+
+    (cond
+      ((sdl2:scancode= scancode :scancode-left) (setf (first *keyboard-direction*) -65))
+      ((sdl2:scancode= scancode :scancode-right) (setf (first *keyboard-direction*) 65))
+      ((sdl2:scancode= scancode :scancode-up)   (setf (second *keyboard-direction*) -65))
+      ((sdl2:scancode= scancode :scancode-down) (setf (second *keyboard-direction*) 65))
+      ((sdl2:scancode= scancode :scancode-escape) (sdl2:push-event :quit))
+      ((sdl2:scancode= scancode :scancode-m)
+       (setf *play-music* (not *play-music*))
+       (if *play-music*
+	   (sdl2-mixer:play-music *music*)
+	   (sdl2-mixer:halt-music)))
+      ((sdl2:scancode= scancode :scancode-space)   
+       
+       (if *game-over*
+	   (progn
+	     (game::reset-maze 10 10)
+	     (setf *game-over* nil))
+	   (when *jump*
+	     (let ((v (ode::body-get-linear-vel *body*)))
+	       (cl-ode:body-set-linear-vel *body* (aref v 0) *jump-speed* (aref v 2)))))))))
+
+
+       
+
 (defun on-key-up (keysym)
   (let ((scancode (sdl2:scancode-value keysym))
 	(sym (sdl2:sym-value keysym))
 	(mod-value (sdl2:mod-value keysym)))
-    
+
     (cond
+      ((sdl2:scancode= scancode :scancode-left) (setf (first *keyboard-direction*) 0))
+      ((sdl2:scancode= scancode :scancode-right) (setf (first *keyboard-direction*) 0))
+      ((sdl2:scancode= scancode :scancode-up) (setf (second *keyboard-direction*) 0))
+      ((sdl2:scancode= scancode :scancode-down) (setf (second *keyboard-direction*) 0))
       ((sdl2:scancode= scancode :scancode-escape) (sdl2:push-event :quit))
-      ((sdl2:scancode= scancode :scancode-space)   (setf *game-over* (not *game-over*)))
+	   
       )))
 
 (defun main-loop ()
@@ -408,7 +440,10 @@
   ;; do physics
   (unless *game-over* 
     (setf *jump* nil)
-    (add-force *body* (first *direction*) 0 (second *direction*))
+    (let ((dir (map 'list (lambda (a b)
+			    (if (>= (abs a) (abs b)) a b))
+		    *keyboard-direction* *direction*)))
+      (add-force *body* (first dir) 0 (second dir)))
     (ode:physics-step *world* *space*))
 
   ;; set the camera

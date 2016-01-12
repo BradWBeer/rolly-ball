@@ -19,3 +19,9 @@ Under quicklisp/local-projects/ "git" the following repos...
 
   Use a controller or arrow keys to move. Use any button or space to jump or restart a game.
   How long can you survive without being vaporized by the orbital lasers?
+
+* Acknowledgments 
+
+Music from http://www.hamsteralliance.com/​ and used with permission. 
+
+Special thanks to oGMo for some of the 3D assets.

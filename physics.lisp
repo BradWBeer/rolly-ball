@@ -73,6 +73,13 @@
 		(setf *jump* t))))))
 )
 
+(defun make-physics-cylinder (pos &optional (height 2))
+  (let ((pc (ode::cylinder-create  *space* 1 4)))
+    (ode::geom-set-rotation pc (sb-cga:rotate-around (sb-cga:vec 1.0 0.0 0.0) (coerce (/ pi 2) 'single-float)))
+    (setf (ode::ghost pc) t)
+    (ode:geom-set-position pc (first pos) height (second pos))
+    pc))
+
 
 
 (defun reset-physics (&optional x y z)

@@ -57,6 +57,7 @@
   (gl:polygon-mode :front-and-back :fill)
   
   (setf *lambda-texture* (clinch::create-texture-from-png (make-local-path "/assets/img/lambda.png")))
+  (setf *lose-texture* (clinch::create-texture-from-png (make-local-path "/assets/img/lose.png")))
   
   (update-shader tex-shader "assets/shaders/simple-texture-shader.lisp")
   (update-shader tex-light-shader "assets/shaders/deferred-g-buffer-shader.lisp")
@@ -141,7 +142,7 @@
   (gl:depth-mask :true)
   
   (gl:blend-func :src-alpha :one-minus-src-alpha)
-  (when *show-overlays* 
+  (when *game-over* 
     (clinch:render overlay-node :projection ortho-matrix)))
 
 

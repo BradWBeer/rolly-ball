@@ -16,7 +16,7 @@ the sdl2:with-init code."
       #-sbcl ,@body)))
 
 
-(defun make-window (&optional (width 20) (height 20))
+(defun make-window (&optional (width 5) (height 5))
   
   (let ((*local-stdout* *standard-output*)
 	(*local-input* *standard-input*))
@@ -41,12 +41,11 @@ the sdl2:with-init code."
 	      (format t "Setting up window/gl.~%")
 	      (finish-output)
 	      (sdl2:gl-make-current win gl-context)
-	      (init)
+	      (init 10 10)
 	      
 	      (on-window-resize 800 600)
 	      (finish-output)
 	      
-	      (reset-maze width height)
 	      
 	      (sdl2:with-event-loop (:method :poll)
 		

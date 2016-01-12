@@ -5,7 +5,10 @@
 (defvar geo-node nil)
 (defvar overlay-node nil)
 (defvar sphere-node nil)
-(defvar cylinder-node nil)
+(defvar cylinder-node-1 nil)
+(defvar cylinder-node-2 nil)
+(defvar cylinder-node-3 nil)
+(defvar cylinder-node-4 nil)
 (defvar overlay-node-1 nil)
 (defvar overlay-node-2 nil)
 (defvar overlay-node-3 nil)
@@ -14,6 +17,10 @@
 (defvar ground-node nil)
 
 (defvar *lambda-texture* nil)
+
+(defvar *lose-screen* nil)
+(defvar *lose-screen-node* nil)
+(defvar *lose-texture* nil)
 
 (defvar overlay-indexes nil)
 (defvar overlay-vertices nil)
@@ -36,12 +43,13 @@
 (defvar *static-objects* nil)
 
 (defvar *manual-objects* nil)
+(defvar *queue* nil)
 (defvar *laser1-position* nil)
 
 (defvar *direction* '(0 0))
 (defvar *jump* nil)
 (defvar *jump-speed* 4)
-(defvar *show-overlays* nil)
+(defvar *game-over* nil)
 
 (defun make-local-path (file)
   (concatenate 'string 
@@ -56,15 +64,16 @@
      (make-local-path file)))))
 
 
-(defun position-cylinder (node maze x y &optional (height 2))
 
-  (let* ((maze-size (array-dimensions maze)))
-    (multiple-value-bind (w h)
-	(maze->position x y (first maze-size) (second maze-size))
-      (clinch:set-identity-transform node)
-      (clinch:rotate node (clinch:degrees->radians 90) 1 0 0)
-      (clinch:scale node 1 height 1)
-      (clinch:translate node w height h))))
+
+(defun position-cylinder (node x y pc &optional (height 2))
+  (clinch:set-identity-transform node)
+  (clinch:rotate node (clinch:degrees->radians 90) 1 0 0)
+  (clinch:scale node 1 height 1)
+  (clinch:translate node x height y)
+  (ode:geom-set-position pc x height y) 
+  t)
+  
 
 (defun lerp (x y distance)
   (let ((1-distance (- 1 distance)))
@@ -75,50 +84,73 @@
 		     (+ (* a 1-distance) (* b distance)))
 	     x y))))
 
-(defun make-move-cylinder-func (node maze start end speed handler)
-  (let* ((pos      start)
-	 (movement (sb-cga:vec* 
-		    (sb-cga:normalize 
-		     (sb-cga:vec- end start))
-		    speed)))
-    (lambda ()
-      (let ((distance (sb-cga:vec-length (sb-cga:vec- pos end))))
-	(if (<  distance speed)
-	    (progn (funcall handler) nil)
-	    (progn
-	      (setf pos 
-		    (sb-cga:vec+ pos movement))
-	      (position-cylinder node (aref pos 0) (aref pos 2))))))))
+(defun make-move-cylinder-func (node pc start end speed handler)
+  (if (< (sb-cga:vec-length (sb-cga:vec- start end))
+	 speed)
+      (lambda ()
+	(and handler (funcall handler) nil))
+      (let* ((pos      start)
+	     (movement (sb-cga:vec* 
+			(sb-cga:normalize 
+			 (sb-cga:vec- end start))
+			speed)))
+	(lambda ()
+	  (let ((distance (sb-cga:vec-length (sb-cga:vec- pos end))))
+	    
+	    (if (<  distance speed)
+		(progn (and handler (funcall handler))
+		       (position-cylinder node (aref end 0) (aref end 2) pc)
+		       nil)
+		(progn
+		  (setf pos 
+			(sb-cga:vec+ pos movement))
+		  (position-cylinder node (aref pos 0) (aref pos 2) pc))))))))
+
+
    
-(defun find-valid-movement (maze x y)
-  (destructuring-bind (w h) (array-dimensions maze)
-    (list (and (> x 0) (aref maze (1- x) y))
-	  (and (> y 0) (aref maze x (1- y)))
-	  (and (< x (1- w)) (aref maze (1+ x) y))
-	  (and (< y (1- h)) (aref maze x (1+ y))))))
+(defun find-valid-movement (y x)
+  (destructuring-bind (w h) (array-dimensions *maze*)
+    (let ((xx (1+ x))
+	  (yy (1+ y)))
+      (remove-if #'null
+		 (list (when (and (> yy 0) (aref *maze* xx (1- yy))) :left)
+		       (when (and (> xx 0) (aref *maze* (1- xx) yy)) :up)
+		       (when (and (< yy (1- h)) (aref *maze* xx (1+ yy))) :right)
+		       (when (and (< xx (1- w)) (aref *maze* (1+ xx) yy)) :down))))))
 
-(defun get-random-valid-direction (maze x y)
-  (loop with lst = (find-valid-movement maze x y)
-     for r = (random 4)
-     until (nth r lst)
-     finally (return 
-	       (cond ((= r 0) '(-1 0))
-		     ((= r 1) '(0 -1))
-		     ((= r 2) '(1 0))
-		     ((= r 3) '(0 1))))))
+(defun get-random-valid-direction (x y &optional last)
+  (let* ((lst (find-valid-movement x y))
+	 (r (alexandria:random-elt lst))
+	 (ret (cond
+		((eql r :left) '(-1 0))
+		((eql r :up) '(0 -1))
+		((eql r :right) '(1 0))
+		((eql r :down) '(0 1)))))
 
-(defun move-random-valid-direction (node maze pos)
-  (let* ((dir (get-random-valid-direction maze (first pos) (second pos)))
-	 (dest (map 'list #'+ pos dir)))
-    (make-move-cylinder-func node pos dest .1
-			     (lambda ()
-			       ))))
-
-			       
-			       (move-random-valid-direction node maze dest)))))
+    (if (and last
+	     (equal last (map 'list #'- ret))
+	     (> (length lst) 1))
+	(get-random-valid-direction x y last)
+	ret)))
     
-  
 
+(defun add-laser-movement (node geom start &optional last-dir)
+  (push 
+   (let* ((r (get-random-valid-direction (first start) (second start) last-dir))
+	  (end (map 'list #'+ start r)))
+     ;;(format t "Start: ~A End: ~A R:~A~%" start end r)
+     (make-move-cylinder-func 
+      node
+      geom
+      (maze->vector (first start) (second start))
+      (maze->vector (first end) (second end))
+      .1
+      (lambda ()
+	(add-laser-movement node geom end r)
+	nil)))
+   *queue*))
+
+    
 
 (defun make-game-maze (width height)
   
@@ -134,27 +166,39 @@
 			  (* (- i w/2) 2))))
     *maze*))
 
-(defun maze->position (x y w h)
-  (values (- 2 (* 2 (- (ash w -2) x)))
-	  (- 2 (* 2 (- (ash h -2) y)))))
+(defun maze->position (x y)
+  (let ((dims (array-dimensions *maze*)))
+    (values (- 2 (* 2 (- (ash (first dims) -2) x)))
+	    (- 2 (* 2 (- (ash (second dims) -2) y))))))
   
-(defun maze->vector (x y w h up)
-  (multiple-value-bind (a b) (maze->position x y w h)
-    (sb-cga:vec (float a) (float up) (float b)))) 
+(defun maze->vector (x y &optional (up 2))
+  (multiple-value-bind (a b) (maze->position x y)
+    (sb-cga:vec (float a) (float up) (float b))))
 
 (defun reset-maze (w h)
   (destroy-all-statics)
+  (setf *random-state* (make-random-state))
   (let ((maze (make-game-maze w h)))
-    (multiple-value-bind (x y) (maze->position 0 0 w h)
+    (multiple-value-bind (x y) (maze->position 0 0)
       (ode:body-set-position *body* x .5 y)
-      (move-random-valid-direction cylinder-node maze '(0 0))
     maze)))
 
-  ;; init game objects...
-(defun init ()
+;;
+(defun add-cylinder (pos)
+  (let ((c (make-instance 'clinch:node))
+	(pc (make-physics-cylinder pos)))
+    (clinch:add-child c cylinder)
+    (clinch:add-child geo-node c)
+    (add-laser-movement c pc pos)
+    (setf (ode::collision-handler pc)
+	  (lambda (this that contact)
+	   (print "Death")
+	   (setf *game-over* t)))
+    ))
 
-  ;;(setf *laser1-position* '(0 0))
-  
+
+  ;; init game objects...
+(defun init (width height)
 
   (init-opengl)
 
@@ -177,11 +221,7 @@
   ;; create the cylinder
   (setf cylinder (eval-from-file "assets/mesh/cylinder.lisp"))
   (setf (clinch:shader cylinder) (lambda () tex-light-shader))
-  (setf cylinder-node (make-instance 'clinch:node))
-  (clinch:add-child cylinder-node cylinder)
-  (clinch:add-child geo-node cylinder-node)
 
-  (clinch:rotate cylinder-node (clinch:degrees->radians 90) 1 0 0)
   (let ((tex (make-texture 20 20)))
     (setf (clinch:render-value cylinder "t1") tex)
     (draw-overlay tex '(1 0 0 1)))
@@ -218,6 +258,10 @@
   (multiple-value-setq (overlay-node-3 overlay-entity-3) (make-overlay overlay-node (lambda () tex-shader) 800 800))
   (multiple-value-setq (overlay-node-4 overlay-entity-4) (make-overlay overlay-node (lambda () tex-shader) 800 800))
 
+  (multiple-value-setq (*lose-screen-node* *lose-screen*) (make-overlay overlay-node (lambda () tex-shader) 800 800))
+  (setf tex
+	(setf (clinch:render-value *lose-screen* "t1") *lose-texture*))
+  
 
   (multiple-value-setq (target-node target)
     (make-overlay nil
@@ -228,7 +272,19 @@
 
   (setf geo-fbo (make-instance 'clinch:frame-buffer))
   
-  (physics-init))
+  (physics-init)
+
+  (reset-maze width height)
+
+
+  (let* ((pos (map 'list (lambda (x)
+			     (- x 3))
+		      (array-dimensions *maze*))))
+	 
+    (setf cylinder-node-1 (add-cylinder pos))
+    (setf cylinder-node-2 (add-cylinder pos))
+    (setf cylinder-node-3 (add-cylinder pos))
+    (setf cylinder-node-4 (add-cylinder pos))))
 
 (defun entity-replace-texture (entity id width height color)
   (let ((tex (clinch:render-value entity id)))
@@ -284,6 +340,8 @@
   (place-node target-node (list (/ width 2) (/ height 2) 0)
 	      (list 0 0 0))
 
+  (place-node *lose-screen-node* (list (/ width 2) (/ height 2) 0) '(0 0 0))
+
   (clinch:bind geo-fbo)
 
   (when depth-buffer (clinch:unload depth-buffer))
@@ -330,7 +388,7 @@
     
     (cond
       ((sdl2:scancode= scancode :scancode-escape) (sdl2:push-event :quit))
-      ((sdl2:scancode= scancode :scancode-space)   (setf *show-overlays* (not *show-overlays*)))
+      ((sdl2:scancode= scancode :scancode-space)   (setf *game-over* (not *game-over*)))
       )))
 
 (defun main-loop ()
@@ -341,14 +399,18 @@
 	   if (funcall i)
 	   collect i))
 
+  (setf *manual-objects* (append *manual-objects* *queue*))
+  (setf *queue* nil)
+  
   ;; do physics
-  (setf *jump* nil)
-  (add-force *body* (first *direction*) 0 (second *direction*))
-  (ode:physics-step *world* *space*)
+  (unless *game-over* 
+    (setf *jump* nil)
+    (add-force *body* (first *direction*) 0 (second *direction*))
+    (ode:physics-step *world* *space*))
 
   ;; set the camera
   (let ((pos (ode:body-get-position *body*)))
-    (set-camera (- (aref pos 0)) -5 (- -2 (aref pos 2)) 40 1 0 0))
+    (set-camera (- (aref pos 0)) -15 (- -4 (aref pos 2)) 60 1 0 0))
 
   ;; do the render pipeline...
   (opengl-clear-main-window)
@@ -356,7 +418,7 @@
   (render-to-target-texture)
 
   ;; show g-buffer overlays when asked
-  (when *show-overlays*
+  (when *game-over*
     (render-overlays)))
 
 

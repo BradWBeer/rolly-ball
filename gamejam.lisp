@@ -200,8 +200,9 @@
   ;; init game objects...
 (defun init (width height)
 
+  (init-sound)
   (init-opengl)
-
+  
   ;; Main geometry node
   (setf geo-node (make-instance 'clinch:node))
   (clinch:translate geo-node 0 -2 -10)
@@ -284,7 +285,9 @@
     (setf cylinder-node-1 (add-cylinder pos))
     (setf cylinder-node-2 (add-cylinder pos))
     (setf cylinder-node-3 (add-cylinder pos))
-    (setf cylinder-node-4 (add-cylinder pos))))
+    (setf cylinder-node-4 (add-cylinder pos)))
+
+  (sdl2-mixer:play-music *music*))
 
 (defun entity-replace-texture (entity id width height color)
   (let ((tex (clinch:render-value entity id)))

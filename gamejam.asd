@@ -5,6 +5,7 @@
   :author "warweasle (Brad Beer)"
   :license "Mega-ultra-free-license. Just don't sue me."
   :depends-on (#:sdl2
+	       #:sdl2-mixer
                #:clinch
                #:clinch-slime
                #:clinch-cairo
@@ -17,5 +18,6 @@
 	       (:file "controller")
 	       (:file "opengl")
 	       (:file "statics")
+	       (:file "sound")
                (:file "gamejam")))
 
